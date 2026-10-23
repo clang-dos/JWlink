@@ -125,7 +125,8 @@ void RefSeg( segdata * seg )
     edgelist *  edge;
     edgelist *  next;
 
-    if( seg->isrefd || seg->visited) return;
+    /* Absolute symbols, such as a weak default at 0000:0000, have no segment. */
+    if( seg == NULL || seg->isrefd || seg->visited) return;
 //  if( !seg->iscode ) return;
     seg->isrefd = TRUE;
     seg->visited = TRUE;
