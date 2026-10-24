@@ -131,13 +131,13 @@ static void TraceFixup( fix_type type, frame_spec *targ )
             isovldata = TRUE;
         if( targ->type == FIX_FRAME_SEG ) {
             if( LinkFlags & STRIP_CODE ) {
-                if( targ->u.sdata->iscode && targ->u.sdata != CurrRec.seg ) {
+                if( DCE_CAN_DIE( targ->u.sdata ) && targ->u.sdata != CurrRec.seg ) {
                     RefSeg( targ->u.sdata );
                 }
             }
         } else if( targ->type == FIX_FRAME_EXT ) {
             if( LinkFlags & STRIP_CODE ) {
-                DCERelocRef( targ->u.sym, !CurrRec.seg->iscode );
+                DCERelocRef( targ->u.sym, !DCE_CAN_DIE( CurrRec.seg ) );
             }
             if( !( type & FIX_REL ) && overlay ) {
                 switch( type & FIX_POINTER_MASK ) {

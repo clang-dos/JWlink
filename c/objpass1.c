@@ -1028,7 +1028,7 @@ void SetComdatSym( symbol *sym, segdata *sdata )
 /*****************************************************/
 {
     if( LinkFlags & STRIP_CODE ) {
-        if( sdata->iscode ) {
+        if( DCE_CAN_DIE( sdata ) ) {
             DefStripSym( sym, sdata );
         }
     }

@@ -30,12 +30,17 @@
 ****************************************************************************/
 
 
+/* Segment pieces that dead code elimination may remove: code, and COMDATs
+ * of any class, such as C++ virtual function tables. */
+#define DCE_CAN_DIE( s )    ( (s)->iscode || (s)->iscdat )
+
 extern void     RefSeg( segdata * );
 extern void     DataRef( symbol * );
 extern void     AddEdge( segdata *, symbol * );
 extern void     AddSymEdge( symbol *, symbol * );
 extern void     AddSymSegEdge( symbol *srcsym, segdata *tarsgdata );
 extern void     DefStripSym( symbol *, segdata * );
+extern void     AliasStripSym( symbol *, symbol * );
 extern void     DefStripImpSym( symbol * sym );
 extern void     CleanStripInfo( symbol * );
 extern void     RefGroupSegs( group_entry * );

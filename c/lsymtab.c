@@ -901,6 +901,7 @@ void MakeSymAlias( char *name, unsigned namelen, char *target, unsigned targetle
 {
     symbol      *sym;
     symbol      *targ;
+    bool        wasalias;
 
     if( namelen == targetlen && (*CmpRtn)( name, target, namelen ) == 0 ) {
         char    *buff;
@@ -912,7 +913,8 @@ void MakeSymAlias( char *name, unsigned namelen, char *target, unsigned targetle
         return;                 // <--------- NOTE: premature return!!!!
     }
     sym = SymOp( ST_CREATE | ST_NOALIAS, name, namelen );
-    if( IS_SYM_ALIAS( sym ) ) {
+    wasalias = IS_SYM_ALIAS( sym );
+    if( wasalias ) {
         LnkMsg( WRN+MSG_MULTIPLE_ALIASES, "S", sym );
         if( sym->info & SYM_FREE_ALIAS ) {
             _LnkFree( sym->p.alias );
@@ -920,12 +922,17 @@ void MakeSymAlias( char *name, unsigned namelen, char *target, unsigned targetle
     } else if( sym->info & SYM_DEFINED ) {
         return;                 // <--------- NOTE: premature return!!!!
     }
-    sym->info |= SYM_FREE_ALIAS;
 /*
  * need to defined aliased symbol as well, so aliases in .obj files can be
  * hauled in from libraries
 */
     targ = SymOp( ST_CREATE, target, targetlen );
+    /* references to sym so far are references to targ for dead code
+     * elimination */
+    if( ( LinkFlags & STRIP_CODE ) && !wasalias && targ != sym ) {
+        AliasStripSym( sym, targ );
+    }
+    sym->info |= SYM_FREE_ALIAS;
     SetSymAlias( sym, targ->name, targetlen );
 }
 
