@@ -433,7 +433,9 @@ void AllocateSegment( segnode *newseg, char *clname )
 {
     DEBUG((DBG_OLD,"objpass1.AllocateSegment() enter, calling DoAllocateSegment() " ));
     DoAllocateSegment( newseg->entry, clname );
-    newseg->info = newseg->entry->u.leader->info;
+    /* SEG_LXDATA_SEEN on the leader means some module had data for it;
+     * this module's piece only has data once its own LxDATA is seen. */
+    newseg->info = newseg->entry->u.leader->info & ~SEG_LXDATA_SEEN;
     DEBUG((DBG_OLD,"objpass1.AllocateSegment(): info updated, new=%h", newseg->info ));
 }
 

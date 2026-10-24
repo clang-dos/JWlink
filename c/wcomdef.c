@@ -424,6 +424,34 @@ static bool CheckSameComdat( void *info, void *sym )
 
 #define ST_COMDAT (ST_CREATE | ST_NOALIAS | ST_REFERENCE)
 
+static bool IsBSSClass( class_entry *class )
+/******************************************/
+/* true for the classes BSS and FAR_BSS (any name ending in BSS) */
+{
+    size_t      len;
+
+    if( class == NULL || class->name == NULL )
+        return( FALSE );
+    len = strlen( class->name );
+    return( len >= 3 && stricmp( class->name + len - 3, BSSClassName ) == 0 );
+}
+
+static bool PieceIsZero( comdat_piece *piece, unsigned flags )
+/************************************************************/
+/* true if a comdat piece holds only zero bytes */
+{
+    unsigned    i;
+
+    if( flags & CDAT_ITERATED )
+        return( FALSE );
+    for( i = 0; i < piece->length; i++ ) {
+        if( piece->data[i] != 0 ) {
+            return( FALSE );
+        }
+    }
+    return( TRUE );
+}
+
 int ProcComdat( struct objbuff *ob )
 /****************************/
 /* process a comdat record */
@@ -540,6 +568,9 @@ int ProcComdat( struct objbuff *ob )
         info = RingLookup( CDatList, CompInfoSym, sym );
         RingAppend( &info->pieces, piece );
         info->sdata->length += piece->length;
+        if( !PieceIsZero( piece, flags ) ) {
+            info->sdata->isuninit = FALSE;
+        }
     } else {
         sdata = AllocSegData();
         sdata->length = piece->length;
@@ -550,6 +581,13 @@ int ProcComdat( struct objbuff *ob )
         if ( seg ) {
             sdata->u.leader = seg->entry->u.leader;
             sdata->iscode = (seg->info & SEG_CODE) != 0;
+            /* A comdat in a BSS or FAR_BSS class segment that holds only
+             * zeros needs no space in the file, like its segment. */
+            if( !sdata->iscode && sdata->u.leader != NULL
+                && IsBSSClass( sdata->u.leader->class )
+                && PieceIsZero( piece, flags ) ) {
+                sdata->isuninit = TRUE;
+            }
         }
         if( ObjFormat & FMT_32BIT_REC ) {
             sdata->is32bit = TRUE;
@@ -572,7 +610,9 @@ int ProcComdat( struct objbuff *ob )
             }
             ClearSymUnion( sym );
             if( alloc == 0 ) {  /* explicit */
-                seg->entry->u.leader->info |= SEG_LXDATA_SEEN;
+                if( !sdata->isuninit ) {
+                    seg->entry->u.leader->info |= SEG_LXDATA_SEEN;
+                }
                 RingAppend( &sdata->u.leader->pieces, sdata );
                 Ring2Append( &CurrMod->segs, sdata );
 #if FULLCOMDAT
