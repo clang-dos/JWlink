@@ -173,8 +173,16 @@ void DoCmdFile( char *fname )
 
     ResetCmdFile();
     if( fname == NULL || *fname == '\0' ) {
+#if defined( __UNIX__ )
+        /* The whole command line, however long: a compiler driver passes
+         * every directive there. */
+        namelen = _bgetcmd( NULL, 0 ) + 1;
+        _ChkAlloc( fname, namelen );
+        _bgetcmd( fname, (int)namelen );
+#else
         _ChkAlloc( fname, (10*1024) );  // arbitrarily large buffer that won't
         GetCmdLine( fname );            // be overflowed
+#endif
         NewCommandSource( NULL, fname, COMMANDLINE );
     } else {
         NewCommandSource( NULL, fname, ENVIRONMENT );
