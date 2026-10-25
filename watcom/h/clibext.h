@@ -27,9 +27,13 @@
 #ifndef O_TEXT
 #define O_TEXT 0
 #endif
+#ifndef _WIN32
 #define stricmp strcasecmp
 #define strcmpi strcasecmp
 #define strnicmp strncasecmp
+#else
+#define strcmpi stricmp
+#endif
 #ifndef getch
 #define getch getchar
 #endif

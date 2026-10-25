@@ -142,10 +142,26 @@ void RefSeg( segdata * seg )
     seg->visited = FALSE;
 }
 
+static symbol *StripUnalias( symbol *sym )
+/****************************************/
+/* a reference to an alias is a reference to the symbol it names */
+{
+    symbol *targ;
+
+    if( IS_SYM_ALIAS( sym ) ) {
+        targ = UnaliasSym( ST_FIND, sym );
+        if( targ != NULL && !IS_SYM_ALIAS( targ ) ) {
+            return( targ );
+        }
+    }
+    return( sym );
+}
+
 void DataRef( symbol * sym )
 /*********************************/
 /* symbol referenced from data, so make sure it is included */
 {
+    sym = StripUnalias( sym );
     if( IS_PPC_PE ) {
         unsigned    len = strlen( sym->name ) + 3;
         char        *s = alloca( len );
@@ -166,9 +182,14 @@ void AddEdge( segdata * seg, symbol * sym )
 {
     edgelist *  edge;
 
+    sym = StripUnalias( sym );
+    if( IS_SYM_ALIAS( sym ) ) {     /* a circular alias names nothing */
+        return;
+    }
+
     if( sym->info & SYM_DEFINED ) {
         if( !IS_SYM_IMPORTED(sym) && seg != sym->p.seg && sym->p.seg != NULL ) {
-            if( seg->isrefd || !seg->iscode ) {
+            if( seg->isrefd || !DCE_CAN_DIE( seg ) ) {
                 RefSeg( sym->p.seg );
             } else if( !sym->p.seg->isrefd ) {
                 edge = AllocEdge();
@@ -179,7 +200,7 @@ void AddEdge( segdata * seg, symbol * sym )
             }
         }
     } else {    /* symbol is undefined */
-        if( seg->isrefd || !seg->iscode ) {
+        if( seg->isrefd || !DCE_CAN_DIE( seg ) ) {
             sym->info |= SYM_DCE_REF;
             PruneNonSymEdges( sym );
         } else {
@@ -229,6 +250,31 @@ void AddSymSegEdge( symbol *srcsym, segdata *targsdata )
     } else {
         edge->next = srcsym->p.edges;
         srcsym->p.edges = edge;
+    }
+}
+
+void AliasStripSym( symbol *sym, symbol *targ )
+/*********************************************/
+/* sym, so far undefined, becomes an alias of targ: what referenced sym
+ * references targ */
+{
+    edgelist *  list;
+    edgelist *  next;
+
+    if( sym->info & SYM_DCE_REF ) {
+        DataRef( targ );
+    }
+    list = sym->p.edges;
+    sym->p.edges = NULL;
+    while( list != NULL ) {
+        next = list->next;
+        if( !list->issym && list->reverse_dir ) {
+            AddEdge( list->u.seg, targ );
+        } else {
+            DataRef( targ );
+        }
+        FreeEdge( list );
+        list = next;
     }
 }
 

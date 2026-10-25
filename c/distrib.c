@@ -41,6 +41,7 @@
 #include "overlays.h"
 #include "ring.h"
 #include "distrib.h"
+#include "objstrip.h"
 #include "specials.h"
 #include "load16m.h"
 
@@ -132,7 +133,7 @@ static void MarkDead( void *_seg )
     if( seg->isdead )
         return;
 
-    if( seg->iscode ) {
+    if( DCE_CAN_DIE( seg ) ) {
         seg->isdead = TRUE;
     } else {
         if( FmtData.type & MK_PE ) {

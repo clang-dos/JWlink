@@ -64,7 +64,7 @@
     #define DbgAssert( cond )
 #endif
 
-#if defined( __UNIX__ )
+#if defined( __UNIX__ ) && !defined( _WIN32 )
     #define PATH_SEP '/'
     #define IS_PATH_SEP( a ) ((a)=='/')
     #define CASE_PATH_SEP case'/'

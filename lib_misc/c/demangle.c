@@ -37,7 +37,7 @@
 #define __NO_STACK_CHECKING__
 #endif
 
-#ifdef __UNIX__
+#if defined( __UNIX__ ) && !defined( _WIN32 )
 #define memicmp strncasecmp
 #endif
 
