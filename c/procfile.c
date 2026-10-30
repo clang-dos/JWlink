@@ -496,7 +496,7 @@ static void DoPass1( mod_entry *next, file_list *list )
 
     loc = 0;
     lastmod = FALSE;
-    DEBUG(( DBG_ALWAYS, "DoPass1(%s) enter", list->file->name ));
+    DEBUG(( DBG_OLD, "DoPass1(%s) enter", list->file->name ));
     if( CacheOpen( list ) ) {
         reclength = CheckLibraryType( list, &loc, FALSE );
         for(;;) { /*  there may be more than 1 object module in a file */
@@ -566,12 +566,11 @@ static void DoPass1( mod_entry *next, file_list *list )
         CacheClose( list, 1 );
     }
     CheckStop();
-    DEBUG(( DBG_ALWAYS, "DoPass1(%s) exit", list->file->name ));
+    DEBUG(( DBG_OLD, "DoPass1(%s) exit", list->file->name ));
 }
 
-char *IdentifyObject( file_list *list, unsigned long *loc,
-                              unsigned long *size )
-/*****************************************************************/
+char *IdentifyObject( file_list *list, unsigned long *loc, unsigned long *size )
+/*******************************************************************************/
 {
     ar_header   *ar_hdr;
     char        *name;
@@ -629,7 +628,7 @@ static unsigned long (*CallPass1[])( void ) = {
     ORLPass1,
     ORLPass1,
     IncPass1,
-    BadObjFormat,
+    BadObjFormat, /* display "is an invalid object file" */
     BadObjFormat,
     BadObjFormat
 };
@@ -641,12 +640,13 @@ unsigned long ObjPass1( void )
     unsigned long loc;
     char          *savename;
 
-    DEBUG(( DBG_OLD, "ObjPass1(): enter, file = %s, module = %s", CurrMod->f.source->file->name, CurrMod->name ));
+    DEBUG(( DBG_OLD, "procfile.ObjPass1(): enter, file = %s, module = %s", CurrMod->f.source->file->name, CurrMod->name ));
     CurrMod->modinfo |= MOD_DONE_PASS_1;
     SymModStart();
     DBIInitModule( CurrMod );
     RelocStartMod();
     P1Start();
+    DEBUG(( DBG_OLD, "procfile.ObjPass1(): ObjFormat=%h", ObjFormat ));
     loc = CallPass1[ GET_FMT_IDX( ObjFormat ) ]();
     CollapseLazyExtdefs();
     SymModEnd();
@@ -661,7 +661,7 @@ unsigned long ObjPass1( void )
     PermEndMod( CurrMod );
     FreeObjInfo();
     ObjFormat = 0;       //clear flags for processing obj file
-    DEBUG(( DBG_OLD, "ObjPass1(): exit, file = %s, module = %s", CurrMod->f.source->file->name, CurrMod->name ));
+    DEBUG(( DBG_OLD, "procfile.ObjPass1(): exit, file = %s, module = %s", CurrMod->f.source->file->name, CurrMod->name ));
     return( loc );
 }
 

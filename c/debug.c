@@ -25,6 +25,8 @@
 *  ========================================================================
 *
 * Description:  Support routines for debug build of linker.
+*               Debug output is activated by XDbg=x cmdline option!!!!
+*               uses DoFmtStr(), defined in msg.c!
 *
 ****************************************************************************/
 

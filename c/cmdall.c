@@ -50,9 +50,6 @@
 #include "permdata.h"
 #include "cmdall.h"
 #include "library.h"
-#ifndef __WATCOMC__
-    #include "clibext.h"
-#endif
 
 static void         *LastFile;
 static file_list    **LastLibFile;
@@ -66,11 +63,20 @@ void ResetCmdAll( void )
 }
 
 bool ProcDosSeg( void )
-/****************************/
+/*********************/
 /* process DOSSEG option */
 {
     LinkState |= DOSSEG_FLAG;
     DEBUG(( DBG_OLD, "dosseg" ));
+    return( TRUE );
+}
+
+bool ProcNoDosSeg( void )
+/***********************/
+/* process DOSSEG option */
+{
+    LinkState &= ~DOSSEG_FLAG;
+    DEBUG(( DBG_OLD, "nodosseg" ));
     return( TRUE );
 }
 

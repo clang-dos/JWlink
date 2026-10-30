@@ -29,6 +29,11 @@
 *
 ****************************************************************************/
 
+#ifdef __WATCOMC__
+#define UNALIGNED _WCUNALIGNED
+#else 
+#define UNALIGNED
+#endif
 
 #include <string.h>
 #include <ctype.h>
@@ -61,6 +66,10 @@
 #include "wres.h"
 #include "loados2.h"
 #include "impexp.h"
+
+#ifdef __UNIX__
+char * _strupr( char * );
+#endif
 
 #define STUB_ALIGN 16
 
@@ -503,7 +512,7 @@ unsigned long ResNonResNameTable( bool dores )
         if( exp->isanonymous ) continue;
         if( (dores && exp->isresident) || (!dores && !exp->isresident) ) {
             if( !(LinkFlags & CASE_FLAG) ) {
-                strupr( exp->name );
+                _strupr( exp->name );
             }
             namelen = strlen( exp->name );
             WriteLoad( &namelen, 1 );
@@ -628,9 +637,51 @@ static unsigned long DumpEntryTable( void )
     return( size + 2 );
 }
 
+static void DropUnusedImportModules( void )
+/*****************************************/
+/* jwlink: keep only the modules that referenced imports come from in the
+ * module reference table of an NE file. Windows loads every module in the
+ * table, so a module that an import directive names but nothing uses
+ * would keep the program from loading where that module does not exist
+ * (SHELL or TOOLHELP on Windows 3.0, for example). */
+{
+    symbol      *sym;
+    name_list   *node;
+    name_list   **owner;
+    unsigned_16 num;
+
+    for( node = FmtData.u.os2.mod_ref_list; node != NULL; node = node->next ) {
+        node->num = 0;
+    }
+    for( sym = HeadSym; sym != NULL; sym = sym->link ) {
+        dll_sym_info    *dll;
+
+        if( !IS_SYM_IMPORTED( sym ) || sym->p.import == NULL )
+            continue;
+        dll = sym->p.import;
+        if( dll->m.modnum != NULL
+            && (sym->info & (SYM_REFERENCED | SYM_LOCAL_REF)) ) {
+            dll->m.modnum->num = 1;
+        }
+    }
+    num = 0;
+    owner = &FmtData.u.os2.mod_ref_list;
+    while( (node = *owner) != NULL ) {
+        if( node->num != 0 ) {
+            node->num = ++num;
+            owner = &node->next;
+        } else {
+            *owner = node->next;
+        }
+    }
+}
+
 void ChkOS2Data( void )
 /**********************/
 {
+    if( FmtData.type & MK_OS2_16BIT ) {
+        DropUnusedImportModules();
+    }
 	DEBUG(( DBG_OLD, "ChkOS2Data(): calling SetSegFlags() with FmtData.u.os2.os2_seg_flags" ));
     SetSegFlags( (seg_flags *) FmtData.u.os2.os2_seg_flags );
     FmtData.u.os2.os2_seg_flags = NULL;
@@ -699,7 +750,7 @@ static void SetGroupFlags( void )
 }
 
 void ChkOS2Exports( void )
-/*******************************/
+/************************/
 // NOTE: there is a continue in this loop!
 {
     symbol          *symptr;

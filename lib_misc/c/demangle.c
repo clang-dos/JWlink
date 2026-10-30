@@ -32,8 +32,13 @@
 #ifdef TEST
 #define __DIP__
 #endif
+
 #ifdef __DIP__
 #define __NO_STACK_CHECKING__
+#endif
+
+#if defined( __UNIX__ ) && !defined( _WIN32 )
+#define memicmp strncasecmp
 #endif
 
 #if 0 || defined(TEST) || defined(DUMP)
@@ -93,6 +98,10 @@
 #define SPEC_TYPE_PREFIX        't'
 #define WAT_FUN_PREFIX          'w'
 #define ASGN_FUN_PREFIX         'a'
+
+#ifdef __UNIX__
+#define __NO_STACK_CHECKING__
+#endif
 
 typedef char *(*realloc_fn_t)( char *, size_t );
 

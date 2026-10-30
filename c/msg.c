@@ -60,7 +60,8 @@ static int              UseArgInfo( void );
 
 #define MSG_ARRAY_SIZE ((MSG_MAX_ERR_MSG_NUM / 8) + 1)
 
-unsigned long   MaxErrors;
+//unsigned long   MaxErrors;
+uint_32         MaxErrors;
 bool            BannerPrinted;
 
 byte MsgFlags[ MSG_ARRAY_SIZE ];
@@ -95,6 +96,7 @@ unsigned DoFmtStr( char *buff, unsigned len, char *src, va_list *args )
 /*                  %c  : character                                 */
 /*                  %x  : 4 digit hex number (%4x)                  */
 /*                  %h  : 8 digit hex number (%8x)                  */
+/*                  %p  : 16 digit hex number (%16x)                */
 /*                  %d  : decimal                                   */
 /*                  %l  : long decimal                              */
 /*                  %a  : address   ( %x:%x or 32 bit, depends on format) */
@@ -108,6 +110,11 @@ unsigned DoFmtStr( char *buff, unsigned len, char *src, va_list *args )
     char            *str;
     unsigned_16     num;
     unsigned_32     num2;
+#ifdef LONG_IS_64BITS
+    unsigned long   num3;
+#else
+    unsigned long long num3;
+#endif
     unsigned        size;
     targ_addr *     addr;
     unsigned int    i;
@@ -197,6 +204,33 @@ unsigned DoFmtStr( char *buff, unsigned len, char *src, va_list *args )
                 break;
             case 'h' :
                 num2 = va_arg( *args, unsigned_32 );
+                if( len < 8) return( dest - buff );     //NOTE: premature return
+                dest += 8;
+                len -= 8;
+                str = dest;
+                for( i = 8; i > 0; i-- ) {
+                    *--str = hexchar[num2 & 0x0f];
+                    num2 >>= 4;
+                }
+                break;
+            case 'p' :
+                if ( sizeof( void *) == 4 )
+                    num2 = va_arg( *args, unsigned_32 );
+                else {
+                    num3 = va_arg( *args, unsigned long );
+                    num2 = (unsigned_32)(num3 >> 32);
+                    if ( num2 ) {
+                        if( len < 8) return( dest - buff );     //NOTE: premature return
+                        dest += 8;
+                        len -= 8;
+                        str = dest;
+                        for( i = 8; i > 0; i-- ) {
+                            *--str = hexchar[num2 & 0x0f];
+                            num2 >>= 4;
+                        }
+                    }
+                    num2 = (unsigned_32)num3;
+                }
                 if( len < 8) return( dest - buff );     //NOTE: premature return
                 dest += 8;
                 len -= 8;

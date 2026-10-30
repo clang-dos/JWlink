@@ -27,9 +27,13 @@
 #ifndef O_TEXT
 #define O_TEXT 0
 #endif
+#ifndef _WIN32
 #define stricmp strcasecmp
 #define strcmpi strcasecmp
 #define strnicmp strncasecmp
+#else
+#define strcmpi stricmp
+#endif
 #ifndef getch
 #define getch getchar
 #endif
@@ -100,7 +104,7 @@ char *_fullpath( char *buf, const char *path, size_t size );
 char *strlwr( char *string );
 char *strupr( char *string );
 char *strrev( char *string );
-int memicmp(const void *, const void *, size_t);
+//int memicmp(const void *, const void *, size_t);
 off_t tell( int handle );
 long filelength(int handle);
 int eof( int fildes );

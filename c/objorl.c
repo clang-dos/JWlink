@@ -466,7 +466,7 @@ static void AllocSeg( void *_snode, void *dummy )
                 snode->info |= SEG_READ_ONLY;
             }
             snode->info |= SEG_DEAD;
-            DEBUG((DBG_OLD,"objorl: AllocSeg() - SEG_DEAD is ON (1)" ));
+            DEBUG((DBG_OLD,"objorl: AllocSeg() - import lib, SEG_DEAD set to ON (1)" ));
             snode->entry = NULL;
             FreeSegData( sdata );
             return;
@@ -476,7 +476,7 @@ static void AllocSeg( void *_snode, void *dummy )
     if( memicmp( CoffDebugPrefix, sdata->u.name,
                 sizeof(CoffDebugPrefix) - 1 ) == 0 ) {
         if( CurrMod->modinfo & MOD_IMPORT_LIB ) {
-            DEBUG((DBG_OLD,"objorl: AllocSeg() - SEG_DEAD is ON (2)" ));
+            DEBUG((DBG_OLD,"objorl: AllocSeg() - debug segment, SEG_DEAD set to ON (2)" ));
             snode->info |= SEG_DEAD;
             snode->entry = NULL;
             FreeSegData( sdata );
@@ -646,6 +646,13 @@ static segnode *FindSegNode( orl_sec_handle sechdl )
     if( idx == 0 ) {
         return( NULL );
     } else {
+
+        /* JWLink: don't call FindNode(), which emits an error */
+        if ( idx > GetNumNodes( SegNodes ) + 1 ) {
+            DEBUG(( DBG_OLD, "objorl.FindSegNode(): index %d exceeds # of items\n", idx ));
+            return( NULL );
+        }
+
         return( FindNode( SegNodes, idx ) );
     }
 }
@@ -719,10 +726,11 @@ static orl_return ProcSymbol( orl_symbol_handle symhdl )
     orl_symbol_binding  binding;
 
     sechdl = ORLSymbolGetSecHandle( symhdl );
-    snode = FindSegNode( sechdl );
+    //snode = FindSegNode( sechdl ); /* jwlink: may fail if 2 sections with identical names are in object module (.drectve) */
     type = ORLSymbolGetType( symhdl );
     name = ORLSymbolGetName( symhdl );
-	DEBUG((DBG_OLD, "objorl.ProcSymbol(%s) enter", name ));
+    DEBUG((DBG_OLD, "objorl.ProcSymbol(%s) enter, type=%h", name ? name : "NULL", type ));
+    snode = FindSegNode( sechdl ); /* jwlink: for debug reasons, search node AFTER name has been retrieved */
     if( type & ORL_SYM_TYPE_FILE ) {
         if( !(CurrMod->modinfo & MOD_GOT_NAME) ) {
             CurrMod->modinfo |= MOD_GOT_NAME;
@@ -771,7 +779,8 @@ static orl_return ProcSymbol( orl_symbol_handle symhdl )
             value = ORLSymbolGetValue( symhdl );
             sym = MakeCommunalSym( sym, value, FALSE, TRUE );
         } else if( type & ORL_SYM_TYPE_UNDEFINED ) {
-			DEBUG((DBG_OLD, "objorl.ProcSymbol(%s): type ORL_SYM_TYPE_UNDEFINED", name ));
+            /* ORL_SYM_TYPE_UNDEFINED flag means: symbol has no associated section */
+			DEBUG((DBG_OLD, "objorl.ProcSymbol(%s): type ORL_SYM_TYPE_UNDEFINED, binding=%h", name, binding ));
             DefineReference( sym );
             isweak = FALSE;
             switch( binding ) {
@@ -834,7 +843,7 @@ static orl_return DoReloc( orl_reloc *reloc )
     bool        skip;
     bool        istoc;
 
-	DEBUG((DBG_OLD, "objorl.DoReloc(): enter" ));
+	DEBUG((DBG_OLD, "objorl.DoReloc(type=%d): enter", reloc->type ));
     skip = FALSE;
     istoc = FALSE;
     type = 0;
@@ -880,10 +889,24 @@ static orl_return DoReloc( orl_reloc *reloc )
         break;
     case ORL_RELOC_TYPE_REL_32:
         type = FIX_OFFSET_32 | FIX_REL;
+        DEBUG(( DBG_OLD, "32-bit PC-relative fixup %x at %h", reloc->type, reloc->offset ));
         break;
     case ORL_RELOC_TYPE_REL_32_NOADJ:
         type = FIX_OFFSET_32 | FIX_REL | FIX_NOADJ;
+        DEBUG(( DBG_OLD, "32-bit PC-relative fixup %x at %h, no adjust", reloc->type, reloc->offset ));
         break;
+#if 1  /* jwlink: special types for COFF AMD64 */
+    case ORL_RELOC_TYPE_REL_32_ADJ1:
+    case ORL_RELOC_TYPE_REL_32_ADJ2: // relative ref to a 32-bit address, need special adjustment
+    case ORL_RELOC_TYPE_REL_32_ADJ3:
+    case ORL_RELOC_TYPE_REL_32_ADJ4:
+    case ORL_RELOC_TYPE_REL_32_ADJ5:
+        adjust = reloc->type - ORL_RELOC_TYPE_REL_32_ADJ1 + 1;
+        /* jwlink: store adjustment in upper 4 bits of type */
+        type = FIX_OFFSET_32 | FIX_REL | (adjust << 28);
+        DEBUG(( DBG_OLD, "32-bit PC-relative fixup %x at %h, adjust=%d", reloc->type, reloc->offset, adjust ));
+        break;
+#endif
     case ORL_RELOC_TYPE_SEGMENT:
         type = FIX_BASE;
         break;
@@ -920,29 +943,25 @@ static orl_return DoReloc( orl_reloc *reloc )
             type = FIX_HIGH_OFFSET_16;
         }
         break;
-    case ORL_RELOC_TYPE_REL_32_ADJ1: /* jwlink */
-    case ORL_RELOC_TYPE_REL_32_ADJ2: // relative ref to a 32-bit address, need special adjustment
-    case ORL_RELOC_TYPE_REL_32_ADJ3:
-    case ORL_RELOC_TYPE_REL_32_ADJ4:
-    case ORL_RELOC_TYPE_REL_32_ADJ5:
-        adjust = reloc->type - ORL_RELOC_TYPE_REL_32_ADJ1 + 1;
-        /* jwlink: store adjustment in upper 4 bits of type */
-        type = FIX_OFFSET_32 | FIX_REL | (adjust << 28);
-        //printf( "32-bit PC-relative fixup %X at %X, adjust=%u\n", reloc->type, reloc->offset, adjust );
-        break;
     case ORL_RELOC_TYPE_WORD_64: /* jwlink */
         type = FIX_OFFSET_64;
+        DEBUG(( DBG_OLD, "64-bit offset at %h", reloc->offset ));
         break;
+#if 0 /* support not implemented yet */
+    case ORL_RELOC_TYPE_PLT_32: /* jwlink */
+        type = FIX_OFFSET_32 | FIX_REL;
+        break;
+#endif
     case ORL_RELOC_TYPE_NONE:
     default:
-        printf( "unknown reloc type %X at %s:%X\n", reloc->type, ORLSecGetName( reloc->section ), reloc->offset );
+        printf( "unknown reloc type %d at %s:%X\n", reloc->type, ORLSecGetName( reloc->section ), reloc->offset );
         LnkMsg( LOC+ERR+MSG_BAD_RELOC_TYPE, NULL );
         skip = TRUE;
         break;
     }
     if( !skip ) {
         seg = FindSegNode( reloc->section );
-        DEBUG(( DBG_OLD, "DoReloc(): seg=%s", seg ? seg->entry->u.leader->segname : "NULL" ))
+        DEBUG(( DBG_OLD, "DoReloc(): seg=%s", ( seg && seg->entry ) ? seg->entry->u.leader->segname : "NULL" ))
         addend = 0;
         if( seg != NULL && !(seg->info & SEG_DEAD) && seg->entry != NULL
                                                    && !seg->entry->isdead ) {
@@ -1100,6 +1119,7 @@ unsigned long ORLPass1( void )
     PermStartMod( CurrMod );
     filehdl = InitFile();
     if( filehdl == NULL ) {
+        DEBUG((DBG_OLD, "objorl.ORLPass1(): filehdl = NULL" ));
         LnkMsg( FTL+MSG_BAD_OBJECT, "s", CurrMod->f.source->file->name );
         CurrMod->f.source->file->flags |= INSTAT_IOERR;
         return( -1 );
@@ -1113,11 +1133,16 @@ unsigned long ORLPass1( void )
             CurrMod->modinfo |= MOD_FLATTEN_DBI;
         }
         CurrMod->modinfo |= MOD_NEED_PASS_2;
-        ORLFileScan( filehdl, NULL, ProcSegments );
+        DEBUG((DBG_OLD, "objorl.ORLPass1(): calling ProcSegments" ));
+        //ORLFileScan( filehdl, NULL, ProcSegments );
+        ORLFileScan( filehdl, 0, ProcSegments );
         IterateNodelist( SegNodes, AllocSeg, NULL );
-        ORLFileScan( filehdl, NULL, ProcSymbols );
+        DEBUG((DBG_OLD, "objorl.ORLPass1(): calling ProcSymbols" ));
+        //ORLFileScan( filehdl, NULL, ProcSymbols );
+        ORLFileScan( filehdl, 0, ProcSymbols );
         ScanImported();
-        ORLFileScan( filehdl, NULL, ProcP1Specific );
+        //ORLFileScan( filehdl, NULL, ProcP1Specific );
+        ORLFileScan( filehdl, 0, ProcP1Specific );
         IterateNodelist( SegNodes, DefNosymComdats, NULL );
     }
     FiniFile( filehdl, CurrMod->f.source );

@@ -62,6 +62,7 @@
 #define GLOBAL_TABALLOC (1792 * sizeof(symbol *)) // 1st power of 128 > TABSIZE
 
 int             (*CmpRtn)( const void *, const void *, size_t );
+/* this var holds the value of the NAMELEN option */
 unsigned        NameLen;
 symbol          *LastSym;
 
@@ -601,7 +602,11 @@ void ResetSym( void )
     SymList = NULL;
     HeadSym = NULL;
     LastSym = NULL;
+#ifdef LONG_IS_64BITS
+    CmpRtn = (int (*)( const void *, const void *, size_t ))memicmp;
+#else
     CmpRtn = memicmp;
+#endif
     GetSymBlock();
     ClearHashPointers();
 }
@@ -767,7 +772,11 @@ void SetSymCase( void )
     if( LinkFlags & CASE_FLAG ) {
         CmpRtn = memcmp;
     } else {
+#ifdef LONG_IS_64BITS
+        CmpRtn = (int (*)( const void *, const void *, size_t ))memicmp;
+#else
         CmpRtn = memicmp;
+#endif
     }
 }
 
@@ -793,10 +802,12 @@ void SymModEnd( void )
             sym = sym->link;
         }
     }
+    DEBUG((DBG_OLD, "SymModEnd(%s): scan symbols", CurrMod->name ));
     for( ; sym != NULL; sym = sym->link ) {
         sym->info &= ~SYM_IN_CURRENT;
         sym->info |= SYM_OLDHAT;
         if( sym->info & SYM_REFERENCED && sym->info & SYM_DEFINED ) {
+            DEBUG((DBG_OLD, "SymModEnd: SYM_REFERENCED reset for %s", sym->name ));
             sym->info &= ~SYM_REFERENCED;
             sym->info |= SYM_LOCAL_REF;
         }
@@ -890,6 +901,7 @@ void MakeSymAlias( char *name, unsigned namelen, char *target, unsigned targetle
 {
     symbol      *sym;
     symbol      *targ;
+    bool        wasalias;
 
     if( namelen == targetlen && (*CmpRtn)( name, target, namelen ) == 0 ) {
         char    *buff;
@@ -901,7 +913,8 @@ void MakeSymAlias( char *name, unsigned namelen, char *target, unsigned targetle
         return;                 // <--------- NOTE: premature return!!!!
     }
     sym = SymOp( ST_CREATE | ST_NOALIAS, name, namelen );
-    if( IS_SYM_ALIAS( sym ) ) {
+    wasalias = IS_SYM_ALIAS( sym );
+    if( wasalias ) {
         LnkMsg( WRN+MSG_MULTIPLE_ALIASES, "S", sym );
         if( sym->info & SYM_FREE_ALIAS ) {
             _LnkFree( sym->p.alias );
@@ -909,12 +922,17 @@ void MakeSymAlias( char *name, unsigned namelen, char *target, unsigned targetle
     } else if( sym->info & SYM_DEFINED ) {
         return;                 // <--------- NOTE: premature return!!!!
     }
-    sym->info |= SYM_FREE_ALIAS;
 /*
  * need to defined aliased symbol as well, so aliases in .obj files can be
  * hauled in from libraries
 */
     targ = SymOp( ST_CREATE, target, targetlen );
+    /* references to sym so far are references to targ for dead code
+     * elimination */
+    if( ( LinkFlags & STRIP_CODE ) && !wasalias && targ != sym ) {
+        AliasStripSym( sym, targ );
+    }
+    sym->info |= SYM_FREE_ALIAS;
     SetSymAlias( sym, targ->name, targetlen );
 }
 
@@ -967,6 +985,12 @@ static symbol *StaticSearchSym( char *symname, unsigned hash, unsigned len )
     return( sym );
 }
 
+/* ST_STATIC = 0x1
+ * ST_CREATE = 0x2
+ * ST_FIND   = 0x8
+ * ST_DUPLICATE = 0x40
+ */
+
 static symbol *DoSymOp( sym_flags op, char *symname, unsigned length )
 /********************************************************************/
 {
@@ -991,13 +1015,15 @@ static symbol *DoSymOp( sym_flags op, char *symname, unsigned length )
         //sym = StaticSearchSym( symname, hash, searchlen );
         if ( ( op & ( ST_CREATE|ST_STATIC|ST_DUPLICATE ) ) == ( ST_CREATE|ST_STATIC|ST_DUPLICATE) )
             sym = NULL;
-        else
+        else {
             sym = StaticSearchSym( symname, hash, searchlen );
+            DEBUG(( DBG_OLD, "DoSymOp(): StaticSearchSym(hash %d) returned sym = %h", hash, sym ));
+        }
     } else {
         hash = GlobalHashFn( symname, searchlen );
         sym = GlobalSearchSym( symname, hash, searchlen );
     }
-    DEBUG(( DBG_OLD, "SymOp( %d, %s, %d ) - hash %d - handle = %h", op, symname_dbg, length, hash, sym ));
+    DEBUG(( DBG_OLD, "DoSymOp( 0x%h, %s, %d ) - hash %d - sym = %h", op, symname_dbg, length, hash, sym ));
     if( sym != NULL ) {
         //DEBUG(( DBG_OLD, "found symbol %s", symname_dbg ));
         //DEBUG(( DBG_OLD, " - handle = %h", sym ));

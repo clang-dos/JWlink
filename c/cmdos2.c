@@ -511,7 +511,7 @@ bool ProcOS2( void )
 }
 
 bool ProcPE( void )
-/************************/
+/*****************/
 {
     ProcOne( NTFormatKeywords, SEP_NO, FALSE );
     FmtData.u.pe.heapcommit = 4*1024;   // arbitrary non-zero default.
@@ -523,6 +523,8 @@ bool ProcPE( void )
 #endif
     FmtData.u.pe.stackcommit = PE_DEF_STACK_COMMIT;
     FmtData.u.pe.os2.segment_shift = 9;    // 512 byte arbitrary rounding
+    LinkState |= DOSSEG_FLAG; /* auto segment reordering */
+
     return( TRUE );
 }
 
@@ -975,6 +977,7 @@ bool ProcNonConforming( void )
 bool ProcMovable( void )
 /*****************************/
 {
+    DEBUG(( DBG_OLD, "ProcMovable(): " ));
     if( FmtData.u.os2.os2_seg_flags->specified & SEG_MOVABLE ) {
         LnkMsg( LOC+LINE+WRN+MSG_SEG_FLAG_MULT_DEFD, NULL );
     }
@@ -986,6 +989,7 @@ bool ProcMovable( void )
 bool ProcFixed( void )
 /*****************************/
 {
+    DEBUG(( DBG_OLD, "ProcFixed(): " ));
     if( FmtData.u.os2.os2_seg_flags->specified & SEG_MOVABLE ) {
         LnkMsg( LOC+LINE+WRN+MSG_SEG_FLAG_MULT_DEFD, NULL );
     }

@@ -131,13 +131,13 @@ static void TraceFixup( fix_type type, frame_spec *targ )
             isovldata = TRUE;
         if( targ->type == FIX_FRAME_SEG ) {
             if( LinkFlags & STRIP_CODE ) {
-                if( targ->u.sdata->iscode && targ->u.sdata != CurrRec.seg ) {
+                if( DCE_CAN_DIE( targ->u.sdata ) && targ->u.sdata != CurrRec.seg ) {
                     RefSeg( targ->u.sdata );
                 }
             }
         } else if( targ->type == FIX_FRAME_EXT ) {
             if( LinkFlags & STRIP_CODE ) {
-                DCERelocRef( targ->u.sym, !CurrRec.seg->iscode );
+                DCERelocRef( targ->u.sym, !DCE_CAN_DIE( CurrRec.seg ) );
             }
             if( !( type & FIX_REL ) && overlay ) {
                 switch( type & FIX_POINTER_MASK ) {
@@ -200,25 +200,13 @@ static unsigned CalcSavedFixSize( fix_type fixtype )
     unsigned    retval;
 
     if( fixtype & FIX_CHANGE_SEG ) {
-        /*
-            FIX_CHANGE_SEG is a special marker record in the saved fixup
-            stream.
-
-            - In incremental mode we store a 32-bit Carve index.
-            - In normal mode, legacy code stores a segdata*.
-
-            On 64-bit hosts, segdata* doesn't fit in 32 bits, so store it
-            as two 32-bit words.
-        */
-#ifdef LONG_IS_64BITS
-        retval = sizeof( unsigned_32 ) * 2;
-#else
-        retval = sizeof( unsigned_32 );
-#endif
+        //retval = sizeof( unsigned_32 );
+        retval = sizeof( void * );
     } else {
         retval = sizeof( save_fixup ) + CalcAddendSize( fixtype );
         if( FRAME_HAS_DATA( FIX_GET_FRAME( fixtype ) ) ) {
-            retval += sizeof( unsigned_32 );
+            //retval += sizeof( unsigned_32 );
+            retval += sizeof( void * );
         }
     }
     return( retval );
@@ -279,7 +267,7 @@ static void MapFramePtr( frame_spec *frame, void **targ )
         *targ = CarveGetIndex( CarveSegData, *targ );
         break;
     case FIX_FRAME_GRP:
-        *targ = (void *)frame->u.group->num;
+        *targ = (void *)(unsigned long)frame->u.group->num;
         break;
     case FIX_FRAME_EXT:
         *targ = CarveGetIndex( CarveSymbol, *targ );
@@ -354,7 +342,7 @@ static void BuildReloc( save_fixup *save, frame_spec *targ, frame_spec *frame )
     fix_data    fix;
     targ_addr   faddr;
 
-	DEBUG(( DBG_OLD, "BuildReloc(%h, %h, %h) enter", save, targ, frame ))
+	DEBUG(( DBG_OLD, "BuildReloc(%p, target type=%d ptr=%p, frame type=%d ptr=%p) enter", save, targ->type, targ->u.ptr, frame->type, frame->u.ptr ))
     memset( &fix, 0, sizeof( fix_data ) );        // to get all bitfields 0
     GetFrameAddr( targ, &fix.tgt_addr, NULL, save->off );
     GetFrameAddr( frame, &faddr, &fix.tgt_addr, save->off );
@@ -438,6 +426,8 @@ static void BuildReloc( save_fixup *save, frame_spec *targ, frame_spec *frame )
     Relocate( save, &fix, targ );
 }
 
+/* increment thru a module's relocs (called by IterateModRelocs() in permdata.c) */
+
 unsigned IncExecRelocs( void *_save )
 /******************************************/
 {
@@ -447,37 +437,21 @@ unsigned IncExecRelocs( void *_save )
     frame_spec  frame;
 
     if( save->flags & FIX_CHANGE_SEG ) {
-        /*
-            FIX_CHANGE_SEG payload representation:
-            - incremental readback: Carve index
-            - normal run: segdata* (stored as u32 on 32-bit, lo/hi u32 on 64-bit)
-        */
+        //sdata = (segdata *)( save->flags & ~FIX_CHANGE_SEG );
+        save->flags &= ~FIX_CHANGE_SEG;
+        sdata = (segdata *)save->pv_flags;
+        save->flags |= FIX_CHANGE_SEG;
+        DEBUG(( DBG_OLD, "IncExecReloc(%p): FIX_CHANGE_SEG, off=%h sdata=%p", _save, save->off, sdata ))
         if( LinkFlags & INC_LINK_FLAG ) {
-            sdata = CarveMapIndex( CarveSegData, (void *)( save->flags & ~FIX_CHANGE_SEG ) );
-            DEBUG(( DBG_OLD, "IncExecReloc(): FIX_CHANGE_SEG (idx), idx=%h sdata=%h", save->flags & ~FIX_CHANGE_SEG, sdata ))
-        } else {
-#ifdef LONG_IS_64BITS
-            {
-                unsigned_32 lo = ( save->flags & ~FIX_CHANGE_SEG );
-                unsigned_32 hi = *((unsigned_32 *)( (char *)save + sizeof( unsigned_32 ) ));
-                unsigned long ptr = ( (unsigned long)hi << 32 ) | lo;
-                sdata = (segdata *)ptr;
-                DEBUG(( DBG_OLD, "IncExecReloc(): FIX_CHANGE_SEG (ptr64), lo=%h hi=%h sdata=%h", lo, hi, sdata ))
-            }
-#else
-            sdata = (segdata *)(unsigned long)( save->flags & ~FIX_CHANGE_SEG );
-            DEBUG(( DBG_OLD, "IncExecReloc(): FIX_CHANGE_SEG (ptr32), sdata=%h", sdata ))
-#endif
+            //save->flags = (unsigned_32) CarveGetIndex( CarveSegData, sdata );
+            save->pv_flags = CarveGetIndex( CarveSegData, sdata );
+            save->flags |= FIX_CHANGE_SEG;
         }
-        if( sdata != NULL && !sdata->isdead ) {
+        if( !sdata->isdead ) {
             LoadObj( sdata );
             LastSegData = sdata;
         } else {
             LastSegData = NULL;
-        }
-        if( LinkFlags & INC_LINK_FLAG ) {
-            save->flags = (unsigned_32) CarveGetIndex( CarveSegData, sdata );
-            save->flags |= FIX_CHANGE_SEG;
         }
     } else {
         targ.type = FIX_GET_TARGET( save->flags );
@@ -485,14 +459,17 @@ unsigned IncExecRelocs( void *_save )
         frame.type = FIX_GET_FRAME( save->flags );
         if( FRAME_HAS_DATA( frame.type ) ) {
             frame.u.ptr = *((void **)( save + 1 ));
+            DEBUG(( DBG_OLD, "IncExecReloc: frame has data - %p", frame.u.ptr ));
         }
         UpdateFramePtr( &targ );
         UpdateFramePtr( &frame );
-        DEBUG(( DBG_OLD, "IncExecReloc(): off=%h type=%h frame.type=%h", save->off, targ.type, frame.type ))
+        DEBUG(( DBG_OLD, "IncExecReloc(%p): save flgs/off/tgt=%h/%h/%p tgt.type/ptr=%d/%p frm.type/ptr=%d/%p",
+            _save, save->flags, save->off, save->target, targ.type, targ.u.ptr, frame.type, frame.u.ptr ))
         if( LastSegData != NULL ) {
             BuildReloc( save, &targ, &frame );
         }
         if( LinkFlags & INC_LINK_FLAG ) {
+            DEBUG(( DBG_OLD, "IncExecReloc: calling MapFramePtr" ));
             MapFramePtr( &targ, &save->target );
             MapFramePtr( &frame, (void **)( save + 1 ) );
         }
@@ -522,18 +499,11 @@ unsigned RelocMarkSyms( void *_fix )
     symbol *    sym;
 
     if( fix->flags & FIX_CHANGE_SEG ) {
-        if( LinkFlags & INC_LINK_FLAG ) {
-            sdata = CarveMapIndex( CarveSegData,
-                                    (void *)( fix->flags & ~FIX_CHANGE_SEG ) );
-            fix->flags = (unsigned_32)CarveGetIndex( CarveSegData, sdata ) | FIX_CHANGE_SEG;
-        } else {
-#ifdef LONG_IS_64BITS
-            /* keep the 64-bit pointer payload intact; nothing to mark */
-            return( sizeof( unsigned_32 ) * 2 );
-#else
-            return( sizeof( unsigned_32 ) );
-#endif
-        }
+        //sdata = CarveMapIndex( CarveSegData, (void *)( fix->flags & ~FIX_CHANGE_SEG ) );
+        fix->flags &= ~FIX_CHANGE_SEG;
+        sdata = CarveMapIndex( CarveSegData, fix->pv_flags );
+        fix->pv_flags = sdata;
+        fix->flags |= FIX_CHANGE_SEG;
     } else {
         frame = FIX_GET_FRAME( fix->flags );
         if( FRAME_HAS_DATA( frame ) ) {
@@ -572,34 +542,15 @@ void StoreFixup( offset off, fix_type type, frame_spec *frame,
     unsigned    size;
     unsigned_8  buff[2 * sizeof( unsigned_32 )];
 
-	DEBUG(( DBG_OLD, "obj2supp.StoreFixup() enter" ));
+	DEBUG(( DBG_OLD, "obj2supp.StoreFixup(off=%h, type=%h, fr.ptr=%p, tgt.ptr=%p, addend=%h) enter", off, type, frame->u.ptr, targ->u.ptr, addend ));
     if( LastSegData != CurrRec.seg ) {
         DbgAssert( CurrRec.seg != NULL );
         LastSegData = CurrRec.seg;
-        /*
-            FIX_CHANGE_SEG payload format depends on incremental linking.
-            The in-memory relocation stream for a normal run historically
-            stored segdata* in the flags word.
-        */
-        if( LinkFlags & INC_LINK_FLAG ) {
-            save.flags = (unsigned_32)CarveGetIndex( CarveSegData, CurrRec.seg );
-        } else {
-            unsigned long ptr = (unsigned long)CurrRec.seg;
-#ifdef LONG_IS_64BITS
-            unsigned_32 lo = (unsigned_32)( ptr & 0xFFFFFFFFUL );
-            unsigned_32 hi = (unsigned_32)( ptr >> 32 );
-            save.flags = lo;
-            save.flags |= FIX_CHANGE_SEG;
-            PermSaveFixup( &save, sizeof( unsigned_32 ) );
-            PermSaveFixup( &hi, sizeof( unsigned_32 ) );
-            goto save_fixup_done;
-#else
-            save.flags = (unsigned_32)ptr;
-#endif
-        }
-        save.flags |= FIX_CHANGE_SEG;
-        PermSaveFixup( &save, sizeof( unsigned_32 ) );
-save_fixup_done:;
+        //save.flags = (unsigned_32) CurrRec.seg;
+        save.pv_flags = CurrRec.seg;
+        save.flags |= FIX_CHANGE_SEG;   // DANGER! assume pointers word aligned
+        //PermSaveFixup( &save, sizeof( unsigned_32 ) );
+        PermSaveFixup( &save, sizeof( void * ) );
     }
     save.flags = type;
     save.flags |= (unsigned_32)targ->type << FIX_TARGET_SHIFT;
@@ -613,6 +564,7 @@ save_fixup_done:;
     if( CurrRec.data != NULL ) {
         memcpy( buff, CurrRec.data + off, size );
     } else {
+        DbgAssert( CurrRec.seg != NULL );
         ReadInfo( CurrRec.seg->data + save.off, buff, size );
     }
     fix.type = type;
@@ -626,7 +578,8 @@ save_fixup_done:;
     }
     PermSaveFixup( &save, sizeof( save_fixup ) );
     if( FRAME_HAS_DATA( frame->type ) ) {
-        PermSaveFixup( &frame->u.abs, sizeof( unsigned_32 ) );
+        //PermSaveFixup( &frame->u.abs, sizeof( unsigned_32 ) );
+        PermSaveFixup( &frame->u.abs, sizeof( void * ) );
     }
     if( !( save.flags & FIX_ADDEND_ZERO ) )  {
         PermSaveFixup( buff, CalcAddendSize( save.flags ) );
@@ -635,8 +588,10 @@ save_fixup_done:;
     if( CurrRec.data != NULL ) {
         memcpy( CurrRec.data + off, buff, size );
     } else {
+        DbgAssert( CurrRec.seg != NULL );
         PutInfo( CurrRec.seg->data + save.off, buff, size );
     }
+	DEBUG(( DBG_OLD, "obj2supp.StoreFixup() exit" ));
 }
 
 unsigned IncSaveRelocs( void *_save )
@@ -652,20 +607,10 @@ unsigned IncSaveRelocs( void *_save )
 	DEBUG(( DBG_OLD, "obj2supp.IncSaveRelocs() enter" ));
     fixsize = CalcSavedFixSize( save->flags );
     if( save->flags & FIX_CHANGE_SEG ) {
-        if( LinkFlags & INC_LINK_FLAG ) {
-            sdata = CarveMapIndex( CarveSegData, (void *)( save->flags & ~FIX_CHANGE_SEG ) );
-        } else {
-#ifdef LONG_IS_64BITS
-            {
-                unsigned_32 lo = ( save->flags & ~FIX_CHANGE_SEG );
-                unsigned_32 hi = *((unsigned_32 *)( (char *)save + sizeof( unsigned_32 ) ));
-                unsigned long ptr = ( (unsigned long)hi << 32 ) | lo;
-                sdata = (segdata *)ptr;
-            }
-#else
-            sdata = (segdata *)(unsigned long)( save->flags & ~FIX_CHANGE_SEG );
-#endif
-        }
+        //sdata = (segdata *)( save->flags & ~FIX_CHANGE_SEG );
+        save->flags &= ~FIX_CHANGE_SEG;
+        sdata = (segdata *) save->pv_flags;
+        save->flags |= FIX_CHANGE_SEG;
         if( !sdata->isdead ) {
             LastSegData = sdata;
         } else {

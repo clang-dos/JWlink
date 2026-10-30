@@ -44,9 +44,6 @@
 #include "objcalc.h"
 #include "objnode.h"
 #include "objpass1.h"
-#ifndef __WATCOMC__
-    #include "clibext.h"
-#endif
 
 
 static group_entry      *GetAutoGroup( bool );
@@ -300,6 +297,7 @@ group_entry *AllocGroup( char *name, group_entry ** grp_list )
     LinkList( grp_list, group );
     if( stricmp( name, DataGrpName ) == 0 ) {
         DataGroup = group;
+        DEBUG((DBG_OLD,"AllocGroup, DataGroup set" ));
     } else if( name == AutoGrpName ) {
         group->isautogrp = 1;
     }

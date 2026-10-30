@@ -92,13 +92,14 @@ static void     ResetSubSystems( void );
 static void     DoLink( char * );
 static void     CleanSubSystems( void );
 
-#ifdef _INT_DEBUG
-/*
- *  I have temporarily left these as extern as they are internal data. On the final pass, either find
- *  a library header that defines these or create one!
- */
+#if 0 //def _INT_DEBUG
+# ifdef __UNIX__
 extern char     *_edata;
 extern char     *_end;
+# else
+extern void _cdecl _edata();
+extern void _cdecl _end();
+# endif
 #endif
 
 static char     *ArgSave;
@@ -107,6 +108,11 @@ static char     *ArgSave;
 //extern int              __nheapblk;
 
 #if !defined( _DLLHOST )           // it's the standalone linker
+
+#ifdef __UNIX__
+extern char **_argv;
+#endif
+
 int main( int argc, char ** argv )
 /***************************************/
 {
@@ -114,7 +120,9 @@ int main( int argc, char ** argv )
     argv = argv;
 #ifndef __WATCOMC__
     _argv = argv;
+# ifndef __UNIX__
     _argc = argc;
+# endif
 #endif
     InitSubSystems();
     LinkMainLine( NULL );
@@ -148,7 +156,7 @@ void LinkMainLine( char *cmds )
 void InitSubSystems( void )
 /********************************/
 {
-#ifdef _INT_DEBUG
+#if 0//def _INT_DEBUG
     memset( _edata, 0xA5, _end - _edata );      // don't rely on BSS == 0
 #endif
     LnkMemInit();
@@ -195,6 +203,7 @@ static void ResetSubSystems( void )
 static void CleanSubSystems( void )
 /*********************************/
 {
+    DEBUG(( DBG_OLD, "CleanSubSystems enter" ));
     if( MapFile != NIL_HANDLE ) {
         QClose( MapFile, MapFName );
         MapFile = NIL_HANDLE;
@@ -202,20 +211,24 @@ static void CleanSubSystems( void )
     FreeOutFiles();
     _LnkFree( MapFName );
     BurnSystemList();
+    DEBUG(( DBG_OLD, "CleanSubSystems: calling FreeList( LibPath )" ));
     FreeList( LibPath );
     CloseSpillFile();
     CleanTraces();
     FreePaths();
     FreeUndefs();
     FreeLocalImports();
+    DEBUG(( DBG_OLD, "CleanSubSystems: calling CleanLoadFile()" ));
     CleanLoadFile();
     CleanLinkStruct();
     FreeFormatStuff();
     FreeObjInfo();
+    DEBUG(( DBG_OLD, "CleanSubSystems: calling FreeVirtMem()" ));
     FreeVirtMem();
     CleanToc();
     CleanSym();
     CleanPermData();
+    DEBUG(( DBG_OLD, "CleanSubSystems exit" ));
 }
 
 void FiniSubSystems( void )
@@ -273,7 +286,7 @@ static void DoLink( char *cmdline )
     ObjPass2();
     CheckErr();
     FiniLoadFile();
-    WritePermData();
+    WritePermData(); /* if incremental linking... */
     BuildImpLib();
     EndTime();
 #ifndef __OSI__

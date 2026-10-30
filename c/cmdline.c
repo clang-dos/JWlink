@@ -173,8 +173,16 @@ void DoCmdFile( char *fname )
 
     ResetCmdFile();
     if( fname == NULL || *fname == '\0' ) {
+#if defined( __UNIX__ )
+        /* The whole command line, however long: a compiler driver passes
+         * every directive there. */
+        namelen = _bgetcmd( NULL, 0 ) + 1;
+        _ChkAlloc( fname, namelen );
+        _bgetcmd( fname, (int)namelen );
+#else
         _ChkAlloc( fname, (10*1024) );  // arbitrarily large buffer that won't
         GetCmdLine( fname );            // be overflowed
+#endif
         NewCommandSource( NULL, fname, COMMANDLINE );
     } else {
         NewCommandSource( NULL, fname, ENVIRONMENT );
@@ -196,7 +204,7 @@ void DoCmdFile( char *fname )
 #else
     } else if( *fname == '-' || *fname == '/' ) {
 #endif
-        if( *(fname + 1) == '?' ) {
+        if( *(fname + 1) == '?' || *(fname + 1) == 'h' ) {
             Token.next = fname + 2;     // skip /?
             Help();
         }
@@ -453,8 +461,10 @@ static void DisplayOptions( void )
 
     WriteGenHelp();
     for ( i = 0; i < NUMHTOPICS; i += 2 ) {
+#ifndef __UNIX__
         if ( i && ( CmdFlags & CF_TO_STDOUT ) )
             PressKey();
+#endif
         WriteHelp( htopics[i], htopics[i+1], CmdFlags & CF_TO_STDOUT );
     }
 }
@@ -573,7 +583,9 @@ static void WriteHelp( unsigned first_ln, unsigned last_ln, bool prompt )
         Msg_Get( (int) first_ln, msg_buffer );
         if( previous_null ) {
             if( msg_buffer[0] != '\0' ) {
+#ifndef __UNIX__
                 PressKey();
+#endif
                 WriteMsg( msg_buffer );
                 previous_null = 0;
             } else break;

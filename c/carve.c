@@ -31,13 +31,17 @@
 
 #include <stddef.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "linkstd.h"
 #include "msg.h"
 #include "fileio.h"
 #include "alloc.h"
 #include "carve.h"
+
+/* this seems to be 16-bit oriented - to be fixed... */
+#define MK_INDEX( b, o )        (((b)<<16)|(o))
+#define GET_BLOCK( i )          (((i)>>16)&0x0ffff)
+#define GET_OFFSET( i )         ((i)&0x0ffff)
 
 struct blk {
     blk_t *     next;
@@ -205,21 +209,58 @@ void *CarveZeroAlloc( carve_t cv )
 /********************************/
 {
     void *v;
-    void *p;
+    unsigned *p;
+    int i;
 
     if( cv->free_list == NULL ) {
         MakeFreeList( cv, newBlk( cv ), 0 );
     }
     _REMOVE_FROM_FREE( cv, v );
     p = v;
-    /*
-        This used to use a small unrolled switch that assumed elements are
-        <= 16 * sizeof(unsigned). On 64-bit builds some structures exceed
-        that, tripping an internal debug abort.
-
-        Zeroing with memset is safe and keeps behavior consistent.
-    */
-    memset( p, 0, cv->elm_size );
+#if 0//def _INT_DEBUG
+    if ( (cv->elm_size / sizeof(*p)) > 16 )
+        DEBUG(( DBG_OLD, "CarveZeroAlloc: elm_size=%h sizeof(*p)=%h", cv->elm_size, sizeof(*p) ));
+#endif
+#if 0
+    DbgAssert( ( cv->elm_size / sizeof(*p) ) <= 16 );
+    switch( cv->elm_size / sizeof(*p) ) {
+    case 16:
+        p[15] = 0;
+    case 15:
+        p[14] = 0;
+    case 14:
+        p[13] = 0;
+    case 13:
+        p[12] = 0;
+    case 12:
+        p[11] = 0;
+    case 11:
+        p[10] = 0;
+    case 10:
+        p[9] = 0;
+    case 9:
+        p[8] = 0;
+    case 8:
+        p[7] = 0;
+    case 7:
+        p[6] = 0;
+    case 6:
+        p[5] = 0;
+    case 5:
+        p[4] = 0;
+    case 4:
+        p[3] = 0;
+    case 3:
+        p[2] = 0;
+    case 2:
+        p[1] = 0;
+    case 1:
+        p[0] = 0;
+    }
+#else
+    for ( i = (cv->elm_size / sizeof(*p)) - 1; i >= 0; i-- )
+        p[i] = 0;
+#endif
     return p;
 }
 
@@ -245,7 +286,7 @@ void CarveDebugFree( carve_t cv, void *elm )
         compare = start + cv->blk_top;
 #if ! ( defined(__COMPACT__) || defined(__LARGE__) )
         /* quick check */
-        if( elm < start || elm > compare ) {
+        if( elm < (void *)start || elm > (void *)compare ) {
             continue;
         }
 #endif
@@ -444,7 +485,7 @@ void CarveInsertFree( carve_t cv, void *data )
 void *CarveMapIndex( carve_t cv, void *aindex )
 /*********************************************/
 {
-    unsigned    index = (unsigned) aindex;
+    unsigned long index = (unsigned long)aindex;
     blk_t *     block;
     blk_t **    block_map;
     unsigned    block_index;
@@ -454,6 +495,7 @@ void *CarveMapIndex( carve_t cv, void *aindex )
     if( index == CARVE_NULL_INDEX ) {
         return( NULL );
     }
+	DEBUG((DBG_OLD, "CarveMapIndex(aindex=%p)", aindex ));
     block_index = GET_BLOCK( index );
     block_offset = GET_OFFSET( index );
     block_map = cv->blk_map;

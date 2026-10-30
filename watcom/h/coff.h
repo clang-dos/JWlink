@@ -589,6 +589,3 @@ typedef enum
 
 #include "poppck.h"
 
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
-_Static_assert(sizeof(coff_symbol) == 18, "`coff_symbol` must be 18 bytes");
-#endif

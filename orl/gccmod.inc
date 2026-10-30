@@ -1,25 +1,19 @@
-omf_objs =  $(OUTD)/omfload.o \
-            $(OUTD)/omfmunge.o \
-            $(OUTD)/omfentr.o \
-            $(OUTD)/omfflhn.o \
-            $(OUTD)/omfdrctv.o
+orl_obj = \
+$(OUTD)/coffentr.o \
+$(OUTD)/coffflhn.o \
+$(OUTD)/coffimpl.o \
+$(OUTD)/coffload.o \
+$(OUTD)/cofflwlv.o \
+$(OUTD)/elfentr.o  \
+$(OUTD)/elfflhn.o  \
+$(OUTD)/elfload.o  \
+$(OUTD)/elflwlv.o  \
+$(OUTD)/omfdrctv.o \
+$(OUTD)/omfentr.o  \
+$(OUTD)/omfload.o  \
+$(OUTD)/omfmunge.o \
+$(OUTD)/omfflhn.o  \
+$(OUTD)/orlentry.o \
+$(OUTD)/orlflhnd.o \
+$(OUTD)/orlhash.o
 
-elf_objs  = $(OUTD)/elfentr.o \
-            $(OUTD)/elflwlv.o \
-            $(OUTD)/elfflhn.o \
-            $(OUTD)/elfload.o
-
-coff_objs = $(OUTD)/coffentr.o \
-            $(OUTD)/cofflwlv.o \
-            $(OUTD)/coffflhn.o \
-            $(OUTD)/coffload.o \
-            $(OUTD)/coffimpl.o
-
-orl_objs  = $(OUTD)/orlentry.o \
-            $(OUTD)/orlflhnd.o \
-            $(OUTD)/orlhash.o \
-            $(omf_objs) \
-            $(elf_objs) \
-            $(coff_objs)
-
-proj_obj = $(orl_objs)

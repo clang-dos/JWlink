@@ -47,6 +47,10 @@
 
 #define _LinkerPrompt "JWLINK>"
 
+#ifdef __UNIX__
+char * _strupr( char * );
+#endif
+
 cmdfilelist      *CmdFile = NULL;
 
 /* Default File Extension array, see ldefext.h */
@@ -199,7 +203,7 @@ bool ProcOne( parse_entry *entry, sep_type req, bool suicide )
                     CmdFlags |= entry->flags;
                 } else {
                     strcpy( keybuff, entry->keyword );
-                    strupr( keybuff ); /* jwlink: was strlwr() */
+                    _strupr( keybuff ); /* jwlink: was strlwr() */
                     LnkMsg( LOC+LINE+WRN+MSG_FORMAT_BAD_OPTION, "s", keybuff );
                     ret = TRUE;
                 }
@@ -276,7 +280,8 @@ ord_state getatol( unsigned_32 *pnt )
 {
     char            *p;
     unsigned        len;
-    unsigned long   value;
+    //unsigned long   value;
+    uint_32         value;
     unsigned        radix;
     bool            isvalid;
     bool            isdig;

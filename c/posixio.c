@@ -35,7 +35,11 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
+#ifdef _WIN32
+#include <conio.h>
+#else
 #include <termios.h>
+#endif
 #include <sys/stat.h>
 #ifdef __WATCOMC__
 #include <process.h>
@@ -447,6 +451,9 @@ time_t QFModTime( int handle )
 char WaitForKey( void )
 /****************************/
 {
+#ifdef _WIN32
+    return (char)_getch();
+#else
     struct termios  old;
     struct termios  new;
     char            result;
@@ -460,6 +467,7 @@ char WaitForKey( void )
     read( 0, &result, 1 );
     tcsetattr( 0, TCSANOW, &old );
     return result;
+#endif
 }
 
 void GetCmdLine( char *buff )

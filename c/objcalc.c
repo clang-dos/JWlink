@@ -96,8 +96,11 @@ void CheckClassOrder( void )
     SortSegments();
     if( LinkState & SPEC_ORDER_FLAG ) {
        WalkAllSects( SortClasses );
-    //} else if( LinkState & DOSSEG_FLAG ) {
-    } else if( ( LinkState & DOSSEG_FLAG ) || ( FmtData.type & (MK_PE|MK_ELF) ) ) {
+       /* v19b14: no automatic segment sorting for PE/ELF anymore.
+        * dosseg has to be set explicitely. To be improved...
+        */
+    //} else if( ( LinkState & DOSSEG_FLAG ) || ( FmtData.type & (MK_PE|MK_ELF) ) ) {
+    } else if( LinkState & DOSSEG_FLAG ) {
        WalkAllSects( ReOrderClasses );
     }
 }
@@ -378,7 +381,7 @@ static void SortSegments( void )
     bool                added;
 
 
-    DEBUG(( DBG_OLD, "SortSegments() enter" ));
+    DEBUG(( DBG_OLD, "SortSegments() enter (root->classlist=%h)", Root->classlist ));
     for( currcl = Root->classlist; currcl != NULL; currcl = currcl->next_class ){
         foundgroup = FALSE;
         newlist = NULL;
@@ -423,6 +426,7 @@ static void SortSegments( void )
         }
         currcl->segs = newlist;
     }
+    DEBUG(( DBG_OLD, "SortSegments() exit" ));
 }
 
 #define CODECL_SIZE ( sizeof( CodeClassName ) - 1 )

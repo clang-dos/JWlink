@@ -77,7 +77,11 @@ static  void            SetDict( file_list *, unsigned_16 );
 static int ARCompName( const void *key, const void *vbase );
 static int ARCompIName( const void *key, const void *vbase );
 int (*CmpARRtn)( const void *, const void * ) = ARCompName;
-int (*CmpOMFRtn)( const void *, const void *, unsigned long ) = memcmp;
+#ifdef LONG_IS_64BITS
+int (*CmpOMFRtn)( const void *, const void *, size_t ) = memcmp;
+#else
+int (*CmpOMFRtn)( const void *, const void *, unsigned ) = memcmp;
+#endif
 
 #if defined( _M_IX86 ) && defined(__WATCOMC__)
 #if defined( __386__ )
@@ -96,7 +100,9 @@ unsigned_16 Rotl16( unsigned_16 value, unsigned_16 shift );
     DATA16 0xd3 0xc0 /* rol ax,cl */ \
     parm            [ax] [cx]   \
     value           [ax];
+
 #else
+
 static unsigned_16 Rotr16( unsigned_16 value, unsigned_16 shift )
 /***************************************************************/
 {
@@ -117,7 +123,11 @@ void SetLibCase( void )
         CmpOMFRtn = memcmp;
         CmpARRtn = ARCompName;
     } else {
+#ifdef LONG_IS_64BITS
+        CmpOMFRtn = (int (*)( const void *, const void *, size_t ))memicmp;
+#else    
         CmpOMFRtn = memicmp;
+#endif
         CmpARRtn = ARCompIName;
     }
 }
@@ -394,10 +404,12 @@ mod_entry * SearchLib( file_list *lib, char *name )
     unsigned long       pos;
     bool                retval;
 
+    DEBUG(( DBG_OLD, "SearchLib( %p, %s ): enter", lib, name ));
     if( lib->u.dict == NULL ) {
         if( !CacheOpen( lib ) ) return( NULL );
         if( CheckLibraryType( lib, &pos, TRUE ) == -1 ) return( NULL );
         if( !(lib->status & STAT_IS_LIB) ) {
+            DEBUG(( DBG_OLD, "SearchLib: bad library" ));
             BadLibrary( lib );
             return NULL;
         }
@@ -409,7 +421,10 @@ mod_entry * SearchLib( file_list *lib, char *name )
     } else {
         retval = ARSearchExtLib( lib, name, &pos );
     }
-    if( !retval ) return NULL;
+    if( !retval ) {
+        DEBUG(( DBG_OLD, "xxxSearchExtLib() failed" ));
+        return NULL;
+    }
 
 /*
     update lib struct since we found desired object file
