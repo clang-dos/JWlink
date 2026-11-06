@@ -639,11 +639,12 @@ static unsigned long DumpEntryTable( void )
 
 static void DropUnusedImportModules( void )
 /*****************************************/
-/* jwlink: keep only the modules that referenced imports come from in the
- * module reference table of an NE file. Windows loads every module in the
- * table, so a module that an import directive names but nothing uses
- * would keep the program from loading where that module does not exist
- * (SHELL or TOOLHELP on Windows 3.0, for example). */
+/* jwlink: keep only the modules that referenced (or forwarded) imports
+ * come from in the module reference table of an NE or LX file. The loader
+ * loads every module in the table, so a module that an import directive
+ * names but nothing uses would keep the program from loading where that
+ * module does not exist (SHELL or TOOLHELP on Windows 3.0, or DIVE and
+ * OPENGL on OS/2 Warp 3, for example). */
 {
     symbol      *sym;
     name_list   *node;
@@ -660,7 +661,7 @@ static void DropUnusedImportModules( void )
             continue;
         dll = sym->p.import;
         if( dll->m.modnum != NULL
-            && (sym->info & (SYM_REFERENCED | SYM_LOCAL_REF)) ) {
+            && (sym->info & (SYM_REFERENCED | SYM_LOCAL_REF | SYM_EXPORTED)) ) {
             dll->m.modnum->num = 1;
         }
     }
@@ -679,7 +680,7 @@ static void DropUnusedImportModules( void )
 void ChkOS2Data( void )
 /**********************/
 {
-    if( FmtData.type & MK_OS2_16BIT ) {
+    if( FmtData.type & (MK_OS2_16BIT | MK_OS2_LX) ) {
         DropUnusedImportModules();
     }
 	DEBUG(( DBG_OLD, "ChkOS2Data(): calling SetSegFlags() with FmtData.u.os2.os2_seg_flags" ));
