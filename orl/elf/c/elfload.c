@@ -256,6 +256,8 @@ static void determine_section_specs( elf_sec_handle elf_sec_hnd, int sh_type,
     elf_sec_hnd->flags = ORL_SEC_FLAG_READ_PERMISSION;
     switch( sh_type ) {
     case SHT_PROGBITS:
+    /* jwlink: constructor and destructor tables are data like any other. */
+    case SHT_PREINIT_ARRAY:
         elf_sec_hnd->type = ORL_SEC_TYPE_PROG_BITS;
         elf_sec_hnd->flags |= ORL_SEC_FLAG_INITIALIZED_DATA;
         break;
@@ -296,12 +298,26 @@ static void determine_section_specs( elf_sec_handle elf_sec_hnd, int sh_type,
         elf_sec_hnd->type = ORL_SEC_TYPE_IMPORT;
         break;
     case SHT_EXPORTS:
-    case SHT_EXPORTS_O:
         elf_sec_hnd->type = ORL_SEC_TYPE_EXPORT;
         break;
     case SHT_RES:
+        elf_sec_hnd->type = ORL_SEC_TYPE_PROG_BITS;
+        break;
+    /* jwlink: 14 and 15 are SHT_INIT_ARRAY and SHT_FINI_ARRAY, constructor
+     * and destructor tables, which are allocated; Watcom's old ELF used
+     * them for export and resource sections. */
+    case SHT_EXPORTS_O:
+        if( sh_flags & SHF_ALLOC ) {
+            elf_sec_hnd->type = ORL_SEC_TYPE_PROG_BITS;
+            elf_sec_hnd->flags |= ORL_SEC_FLAG_INITIALIZED_DATA;
+        } else {
+            elf_sec_hnd->type = ORL_SEC_TYPE_EXPORT;
+        }
+        break;
     case SHT_RES_O:
         elf_sec_hnd->type = ORL_SEC_TYPE_PROG_BITS;
+        if( sh_flags & SHF_ALLOC )
+            elf_sec_hnd->flags |= ORL_SEC_FLAG_INITIALIZED_DATA;
         break;
     default:
         elf_sec_hnd->type = ORL_SEC_TYPE_NONE;
