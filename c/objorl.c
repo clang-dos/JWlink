@@ -495,6 +495,12 @@ static void AllocSeg( void *_snode, void *dummy )
         clname = TLSClassName;
     } else if( sdata->iscode ) {
         clname = CodeClassName;
+    } else if( sdata->isuninit && ( FmtData.type & MK_OS2_FLAT )
+               && stricmp( sname, ".stack" ) == 0 ) { /* jwlink */
+        /* An uninitialized ELF or COFF section named .stack is the stack
+         * segment, as an OMF segment of class STACK is: OS/2 LX and LE
+         * programs need one for the stack object in the header. */
+        clname = StackClassName;
     } else if( sdata->isuninit ) {
         clname = BSSClassName;
     } else if ( ( FmtData.type & (MK_PE|MK_ELF) ) && ( sdata->isreadonly ) ) { /* jwlink */
