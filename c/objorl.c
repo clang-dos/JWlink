@@ -457,6 +457,25 @@ static void AllocSeg( void *_snode, void *dummy )
     DEBUG((DBG_OLD,"objorl: AllocSeg() - %s iscode=%d isuninit=%d isreadonly=%d isidata=%d iscdat=%d snode.info=%h",
            sdata->u.name, sdata->iscode, sdata->isuninit, sdata->isreadonly, sdata->isidata, sdata->iscdat, snode->info ));
     sname = sdata->u.name;
+    /* jwlink: ELF constructor and destructor tables with a priority
+     * (.init_array.101) join the tables without one, so that they are all
+     * between the start and end markers of the startup code. */
+    {
+        static char * const tables[] = { ".init_array", ".fini_array", ".preinit_array" };
+        int i;
+        for( i = 0; i < 3; i++ ) {
+            size_t len = strlen( tables[i] );
+            const char *p = sname + len;
+            if( memcmp( sname, tables[i], len ) == 0 && p[0] == '.'
+                && p[1] >= '0' && p[1] <= '9' ) {
+                for( p++; *p >= '0' && *p <= '9'; p++ )
+                    ;
+                if( *p == '\0' ) {
+                    sdata->u.name = sname = tables[i];
+                }
+            }
+        }
+    }
     if( CurrMod->modinfo & MOD_IMPORT_LIB ) {
         if( sdata->isidata || sdata->iscode ) {
             if( sdata->iscode ) {
@@ -797,6 +816,14 @@ static orl_return ProcSymbol( orl_symbol_handle symhdl )
                 assocsymhdl = ORLSymbolGetAssociated( symhdl );
                 name = ORLSymbolGetName( assocsymhdl );
                 namelen = strlen(name);
+                /* jwlink: an undefined weak ELF symbol has no default of its
+                 * own (it is its own associated symbol). It is 0 if nothing
+                 * defines it, which __elf_weak_null, an absolute symbol the
+                 * startup code defines, gives. */
+                if( assocsymhdl == symhdl ) {
+                    name = "__elf_weak_null";
+                    namelen = sizeof( "__elf_weak_null" ) - 1;
+                }
                 if( binding == ORL_SYM_BINDING_ALIAS ) {
                     MakeSymAlias( sym->name, strlen(sym->name), name, namelen );
                 } else {

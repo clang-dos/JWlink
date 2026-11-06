@@ -317,6 +317,9 @@ typedef struct {
 #define SHT_REL         9               // as RELA but no explicit addends
 #define SHT_SHLIB       10              // reserved but evil
 #define SHT_DYNSYM      11              // dynamic link symbol table
+#define SHT_INIT_ARRAY  14              // array of constructor pointers
+#define SHT_FINI_ARRAY  15              // array of destructor pointers
+#define SHT_PREINIT_ARRAY 16            // array of pre-constructor pointers
 #define SHT_OS          0x60000001      // info to identify target OS
 #define SHT_IMPORTS     0x60000002      // info on refs to external symbols
 #define SHT_EXPORTS     0x60000003      // info on symbols exported by ordinal
