@@ -1511,6 +1511,17 @@ static void FmtReloc( fix_data *fix, frame_spec *tthread )
                 PUT_U8( fixptr, dll->u.ordinal );
             }
             fixptr += 1;
+            /* jwlink: an ELF PC-relative fixup (FIX_NOADJ) keeps -4 in its
+             * field, since it is relative to the start of the field. The
+             * LX loader makes a self-relative fixup relative to the end of
+             * the field itself, so drop that -4 from the additive value. */
+            if( ( fix->type & ( FIX_REL | FIX_NOADJ ) ) == ( FIX_REL | FIX_NOADJ ) ) {
+                fix->value += CalcFixupSize( fix->type );
+                fix->additive = ( fix->value != 0 );
+                if( !fix->additive ) {
+                    PUT_U32( fix->data, 0 );
+                }
+            }
             if( fix->additive ) {
                 flags |= OSF_ADDITIVE;
                 switch( fix->type & FIX_OFFSET_MASK ) {
